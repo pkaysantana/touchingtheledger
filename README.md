@@ -1,13 +1,11 @@
 # Touching the Ledger
 
-Python lab client for authenticating with the Cantor8 Keycloak identity
-provider and onboarding an externally controlled party through the Canton
-Validator Admin API.
+Python lab client for querying the Canton Coin balance of the configured party
+through the Cantor8 V2 JSON Ledger API.
 
 ## Requirements
 
 - Python 3.10 or newer
-- OpenSSL with Ed25519 support for external-party signatures
 - Access to the Cantor8 hackathon validator
 
 ## Setup
@@ -51,13 +49,12 @@ python canton_lab.py
 The script:
 
 1. Obtains a short-lived JWT from Keycloak.
-2. Requests external-party topology transactions using a party hint and a
-   hex-encoded Ed25519 public key.
-3. Prompts for a signature over each returned topology hash.
-4. Submits the unchanged topology transactions with their signatures.
-5. Prints the allocated Canton Party ID.
+2. Queries `/v2/state/active-contracts` for the configured Canton Party ID.
+3. Selects active contracts whose template ID contains `Holding`.
+4. Adds their `createArguments.amount` values using decimal arithmetic.
+5. Prints the final Canton Coin balance.
 
-## Secret handling
+## Security
 
 The following paths are intentionally excluded from Git:
 
@@ -66,21 +63,15 @@ The following paths are intentionally excluded from Git:
 - `secrets/`
 - `topology_tx.json`
 
-Never commit the OAuth client secret or Ed25519 private key. On Windows, the
-`secrets` directory and private key should have NTFS access restricted to the
-owning user. Back up the private key in secure encrypted storage; losing it
-removes the ability to sign as the external party.
-
+Never commit OAuth credentials or the external party's Ed25519 private key.
 Moving a previously committed credential into `.env` does not remove it from
-Git history. Rotate any credential that was previously committed or shared.
+Git history; rotate any credential that was previously committed or shared.
 
-## API notes
+## API behavior
 
-The validator endpoints under
-`/v0/admin/external-party/` onboard an externally controlled party. They are
-not the same as allocating a participant-managed internal party through the
-Ledger API.
+The active-contract endpoint returns a point-in-time ledger snapshot. The
+script accepts both the requested `activeContract` response shape and Canton's
+documented `contractEntry.JsActiveContract.createdEvent` wrapper.
 
-The topology submit request requires the original generated topology
-transactions and an Ed25519 signature for every returned hash. The private key
-must remain local and must never be sent to the validator.
+The query is read-only. It does not create, archive, exercise, or transfer any
+ledger contracts.
