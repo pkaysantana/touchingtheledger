@@ -1,16 +1,25 @@
 import asyncio
 import json
+import os
 from collections.abc import Callable
 
 import httpx
+from dotenv import load_dotenv
 
-# Coordinates from your lab brief
+# Load credentials from the .env file
+load_dotenv()
+
 AUTH_URL = "https://auth.dev.digik.cantor8.tech/realms/master/protocol/openid-connect/token"
-CLIENT_ID = "hackathon"
-CLIENT_SECRET = "0JElLeAZK7fcRF4ngghM2s7XWxPgDYSD"
+CLIENT_ID = os.getenv("CANTOR8_CLIENT_ID")
+CLIENT_SECRET = os.getenv("CANTOR8_CLIENT_SECRET")
 
 ADMIN_API_BASE = "https://api.validator.dev.digik.cantor8.tech/api/validator"
 LEDGER_API_BASE = "https://api.validator.dev.digik.cantor8.tech/api/ledger"
+
+if not CLIENT_ID or not CLIENT_SECRET:
+    raise ValueError(
+        "Critical Security Error: Missing Identity Provider credentials in .env"
+    )
 
 
 async def get_auth_token() -> str:
