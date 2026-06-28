@@ -27,20 +27,48 @@ async def get_auth_token() -> str:
         return body["access_token"]
 
 
+async def allocate_party(headers: dict) -> str:
+    """Generates and submits the topology to allocate a new internal party."""
+    async with httpx.AsyncClient() as client:
+        print("Step 2a: Generating topology transaction...")
+        gen_url = f"{ADMIN_API_BASE}/v0/admin/external-party/topology/generate"
+
+        # Sending an empty payload is standard for generating a new party without a specific hint
+        gen_response = await client.post(gen_url, headers=headers, json={})
+        gen_response.raise_for_status()
+        topology_tx = gen_response.json()
+
+        print("Step 2b: Submitting topology transaction...")
+        submit_url = f"{ADMIN_API_BASE}/v0/admin/external-party/topology/submit"
+
+        submit_response = await client.post(
+            submit_url, headers=headers, json=topology_tx
+        )
+        submit_response.raise_for_status()
+
+        # Canton's topology submit response contains the assigned Party ID
+        result = submit_response.json()
+        party_id = result.get("partyId")
+
+        print(f"\n Success! Your allocated Party ID is:\n{party_id}\n")
+        return party_id
+
+
 async def main():
     try:
-        # Step 1: Secure your access token
+        # Step 1: Secure access token
         token = await get_auth_token()
 
-        # This header dictionary will be reused for all subsequent API requests
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
+        print("Successfully authenticated!\n")
 
-        print(f"\nYour JWT is ready (truncated): {token[:30]}...")
+        # Step 2: Allocate the new party
+        party_id = await allocate_party(headers)
 
-        # Next step will go here (Registering the internal party)
+        # (Next: We will use this party_id to create the PreApproval DAML contract)
 
     except httpx.HTTPStatusError as e:
         print(f"HTTP Error: {e.response.status_code} - {e.response.text}")
