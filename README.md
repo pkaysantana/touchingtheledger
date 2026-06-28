@@ -49,10 +49,12 @@ python canton_lab.py
 The script:
 
 1. Obtains a short-lived JWT from Keycloak.
-2. Queries `/v2/state/active-contracts` for the configured Canton Party ID.
-3. Selects active contracts whose template ID contains `Holding`.
-4. Adds their `createArguments.amount` values using decimal arithmetic.
-5. Prints the final Canton Coin balance.
+2. Gets the current string offset from `/v2/state/ledger-end`.
+3. Queries `/v2/state/active-contracts` at that offset for the configured
+   Canton Party ID.
+4. Selects active contracts whose template ID contains `Holding`.
+5. Adds their `createArguments.amount` values using decimal arithmetic.
+6. Prints the final Canton Coin balance.
 
 ## Security
 
@@ -69,9 +71,9 @@ Git history; rotate any credential that was previously committed or shared.
 
 ## API behavior
 
-The active-contract endpoint returns a point-in-time ledger snapshot. The
-script accepts both the requested `activeContract` response shape and Canton's
-documented `contractEntry.JsActiveContract.createdEvent` wrapper.
+The active-contract endpoint returns a point-in-time ledger snapshot. Each
+item is read from `contractEntry.activeContract`, and offsets remain strings
+end-to-end to avoid 64-bit precision loss.
 
 The query is read-only. It does not create, archive, exercise, or transfer any
 ledger contracts.

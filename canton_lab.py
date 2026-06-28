@@ -46,29 +46,13 @@ async def get_auth_token(client: httpx.AsyncClient) -> str:
 
 
 def extract_active_contract(entry: dict) -> dict | None:
-    """Accept the requested response shape and Canton's documented V2 wrapper."""
-    active_contract = entry.get("activeContract")
-    if isinstance(active_contract, dict):
-        return active_contract
-
+    """Extract contractEntry.activeContract from a Canton V2 response item."""
     contract_entry = entry.get("contractEntry")
     if not isinstance(contract_entry, dict):
         return None
 
-    wrapped_contract = contract_entry.get("JsActiveContract")
-    if not isinstance(wrapped_contract, dict):
-        return None
-
-    created_event = wrapped_contract.get("createdEvent")
-    if not isinstance(created_event, dict):
-        return None
-
-    return {
-        "templateId": created_event.get("templateId"),
-        "createArguments": created_event.get(
-            "createArguments", created_event.get("createArgument")
-        ),
-    }
+    active_contract = contract_entry.get("activeContract")
+    return active_contract if isinstance(active_contract, dict) else None
 
 
 def parse_amount(create_arguments: dict, contract_index: int) -> Decimal:
@@ -87,7 +71,33 @@ def parse_amount(create_arguments: dict, contract_index: int) -> Decimal:
         ) from exc
 
 
-async def get_cc_balance(client: httpx.AsyncClient, token: str) -> Decimal:
+async def get_ledger_end(client: httpx.AsyncClient, token: str) -> str:
+    """Return the ledger offset as a string to preserve 64-bit precision."""
+    url = f"{LEDGER_API_BASE}/v2/state/ledger-end"
+    response = await client.get(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if response.is_error:
+        print(
+            f"Ledger API error {response.status_code} "
+            f"{response.reason_phrase}:\n{response.text}"
+        )
+    response.raise_for_status()
+
+    offset = response.json().get("offset")
+    if isinstance(offset, str):
+        return offset
+    if isinstance(offset, int) and not isinstance(offset, bool):
+        return str(offset)
+    raise ValueError(
+        "Ledger-end response did not contain a string or integer offset"
+    )
+
+
+async def get_cc_balance(
+    client: httpx.AsyncClient, token: str, active_at_offset: str
+) -> Decimal:
     """Query active Holding contracts and return their total Canton Coin amount."""
     url = f"{LEDGER_API_BASE}/v2/state/active-contracts"
     payload = {
@@ -107,7 +117,7 @@ async def get_cc_balance(client: httpx.AsyncClient, token: str) -> Decimal:
             },
             "verbose": False,
         },
-        "activeAtOffset": "",
+        "activeAtOffset": active_at_offset,
     }
     headers = {
         "Authorization": f"Bearer {token}",
@@ -156,8 +166,10 @@ async def main() -> None:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             token = await get_auth_token(client)
-            balance = await get_cc_balance(client, token)
+            active_at_offset = await get_ledger_end(client, token)
+            balance = await get_cc_balance(client, token, active_at_offset)
             print(f"Final CC balance: {balance}")
+            print(f"Crypto Wallet / Party ID for Form: {PARTY_ID}")
     except httpx.HTTPStatusError as exc:
         print(
             f"HTTP Error: {exc.response.status_code} - {exc.response.text}"
